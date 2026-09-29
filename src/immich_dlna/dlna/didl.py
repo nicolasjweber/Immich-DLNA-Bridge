@@ -60,10 +60,22 @@ def render_entries(entries: list[BrowseEntry]) -> str:
                     {f"{{{DLNA_NS}}}profileID": "JPEG_TN"},
                 )
                 album_art_tn.text = entry.album_art_uri
+                album_art_sm = ET.SubElement(
+                    container_element,
+                    f"{{{UPNP_NS}}}albumArtURI",
+                    {f"{{{DLNA_NS}}}profileID": "JPEG_SM"},
+                )
+                album_art_sm.text = entry.album_art_uri
                 album_art = ET.SubElement(container_element, f"{{{UPNP_NS}}}albumArtURI")
                 album_art.text = entry.album_art_uri
                 icon = ET.SubElement(container_element, f"{{{UPNP_NS}}}icon")
                 icon.text = entry.album_art_uri
+                res_art = ET.SubElement(
+                    container_element,
+                    f"{{{DIDL_NS}}}res",
+                    {"protocolInfo": "http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN;DLNA.ORG_OP=01;DLNA.ORG_CI=1"},
+                )
+                res_art.text = entry.album_art_uri
             continue
 
         item = ET.SubElement(

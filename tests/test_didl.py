@@ -34,9 +34,16 @@ def test_render_container_with_album_art() -> None:
     assert len(art_elements) >= 1
     assert any(elem.text == avatar_url for elem in art_elements)
 
-    # Verify profileID="JPEG_TN"
+    # Verify profileID="JPEG_TN" and "JPEG_SM"
     dlna_profile_arts = [elem for elem in art_elements if elem.attrib.get("{urn:schemas-dlna-org:metadata-1-0/}profileID") == "JPEG_TN"]
     assert len(dlna_profile_arts) == 1
+    dlna_profile_arts_sm = [elem for elem in art_elements if elem.attrib.get("{urn:schemas-dlna-org:metadata-1-0/}profileID") == "JPEG_SM"]
+    assert len(dlna_profile_arts_sm) == 1
+
+    # Verify container res element
+    res_elements = c.findall(f".//{{{DIDL_NS}}}res")
+    assert len(res_elements) == 1
+    assert res_elements[0].text == avatar_url
 
 
 def test_render_media_items() -> None:

@@ -17,6 +17,7 @@ from immich_dlna.dlna.model import (
     PEOPLE_NAME_ID,
     PEOPLE_PHOTOS_CONTAINER,
     PEOPLE_PHOTOS_ID,
+    PHOTO_ALBUM_CONTAINER_CLASS,
     ROOT_CONTAINER,
     ROOT_ID,
     TAGS_CONTAINER,
@@ -171,6 +172,7 @@ class ContentCatalog:
                     object_id=person_object_id(person.person_id),
                     parent_id=PEOPLE_ID,
                     title=person.name,
+                    upnp_class=PHOTO_ALBUM_CONTAINER_CLASS,
                     album_art_uri=avatar_url,
                 )
             return None
@@ -190,6 +192,7 @@ class ContentCatalog:
                         object_id=album_object_id(album.album_id),
                         parent_id=ALBUMS_ID,
                         title=album.name,
+                        upnp_class=PHOTO_ALBUM_CONTAINER_CLASS,
                         child_count=album.asset_count,
                         album_art_uri=cover_url,
                     )
@@ -320,6 +323,7 @@ class ContentCatalog:
                         object_id=album_object_id(album.album_id),
                         parent_id=ALBUMS_ID,
                         title=album.name,
+                        upnp_class=PHOTO_ALBUM_CONTAINER_CLASS,
                         child_count=album.asset_count,
                         album_art_uri=cover_url,
                     )
@@ -435,6 +439,7 @@ class ContentCatalog:
                     object_id=person_object_id(person.person_id),
                     parent_id=parent_id,
                     title=title,
+                    upnp_class=PHOTO_ALBUM_CONTAINER_CLASS,
                     album_art_uri=avatar_url,
                 )
             )

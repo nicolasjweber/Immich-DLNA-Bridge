@@ -12,6 +12,7 @@ FAVORITES_ID = "favorites"
 TAGS_ID = "tags"
 
 CONTAINER_CLASS = "object.container.storageFolder"
+PHOTO_ALBUM_CONTAINER_CLASS = "object.container.album.photoAlbum"
 IMAGE_CLASS = "object.item.imageItem.photo"
 VIDEO_CLASS = "object.item.videoItem"
 
