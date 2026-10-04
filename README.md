@@ -107,6 +107,7 @@ Edit `.env` with your Immich instance details:
 IMMICH_URL=http://192.168.1.50:2283
 
 # Your Immich API Token (Created in Immich Web UI -> Account Settings -> API Keys)
+# Note: Ensure the API key has permission for view/folder endpoints (or full permissions)
 IMMICH_API_TOKEN=your_secret_api_key_here
 
 # Friendly name displayed on your TV
@@ -224,6 +225,10 @@ The bridge includes an integrated web explorer for testing and browsing your lib
 
 ### Videos fail to seek or fast-forward
 - Seeking relies on HTTP byte-range requests. This bridge forwards the HTTP `Range` header and responds with `206 Partial Content`, enabling video seeking across TV media players.
+
+### "Ordner" (Folder View) is empty
+- In Immich Web UI -> **Account Settings** -> **API Keys**, verify that your API key has permissions to access view/folder endpoints (or grant full permissions to the key).
+
 
 ---
 
