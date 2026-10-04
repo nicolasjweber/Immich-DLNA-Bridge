@@ -19,7 +19,9 @@ def test_settings_from_env_defaults() -> None:
         assert settings.immich_api_token == "secret-token"
         assert settings.enable_timeline is False
         assert settings.enable_albums is True
-        assert settings.enable_videos is True
+        assert settings.enable_tags is True
+        assert settings.tags_group_by_letter == "auto"
+        assert settings.enable_years is True
         assert settings.enable_year_all is True
         assert settings.number_people is True
         assert settings.number_years is True
@@ -61,3 +63,28 @@ def test_settings_from_env_invalid_format_fallback() -> None:
     with mock.patch.dict(os.environ, env, clear=True):
         settings = Settings.from_env()
         assert settings.asset_title_format == "index_filename"
+
+
+def test_settings_from_env_tags_grouping() -> None:
+    base_env = {
+        "IMMICH_URL": "http://192.168.1.50:2283",
+        "IMMICH_API_TOKEN": "secret-token",
+    }
+
+    # "true", "1", "yes"
+    with mock.patch.dict(os.environ, {**base_env, "IMMICH_DLNA_TAGS_GROUP_BY_LETTER": "true"}, clear=True):
+        assert Settings.from_env().tags_group_by_letter == "true"
+    with mock.patch.dict(os.environ, {**base_env, "IMMICH_DLNA_TAGS_GROUP_BY_LETTER": "1"}, clear=True):
+        assert Settings.from_env().tags_group_by_letter == "true"
+
+    # "false", "0", "no"
+    with mock.patch.dict(os.environ, {**base_env, "IMMICH_DLNA_TAGS_GROUP_BY_LETTER": "false"}, clear=True):
+        assert Settings.from_env().tags_group_by_letter == "false"
+    with mock.patch.dict(os.environ, {**base_env, "IMMICH_DLNA_TAGS_GROUP_BY_LETTER": "0"}, clear=True):
+        assert Settings.from_env().tags_group_by_letter == "false"
+
+    # default / auto / unknown
+    with mock.patch.dict(os.environ, {**base_env, "IMMICH_DLNA_TAGS_GROUP_BY_LETTER": "auto"}, clear=True):
+        assert Settings.from_env().tags_group_by_letter == "auto"
+    with mock.patch.dict(os.environ, {**base_env, "IMMICH_DLNA_TAGS_GROUP_BY_LETTER": "something_else"}, clear=True):
+        assert Settings.from_env().tags_group_by_letter == "auto"

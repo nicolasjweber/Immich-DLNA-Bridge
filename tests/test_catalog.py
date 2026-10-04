@@ -13,12 +13,15 @@ from immich_dlna.dlna.model import (
     PEOPLE_NAME_ID,
     PEOPLE_PHOTOS_ID,
     ROOT_ID,
+    TAGS_ALL_ID,
     TAGS_ID,
     TIMELINE_ID,
     VIDEOS_ID,
     YEARS_ID,
     Container,
     MediaItem,
+    tag_group_object_id,
+    tag_object_id,
 )
 from immich_dlna.immich import ImmichAlbum, ImmichAsset, ImmichClient, ImmichPerson, ImmichTag
 
@@ -380,4 +383,128 @@ async def test_browse_years_without_numbering(mock_settings: Settings, mock_immi
     assert y_total == 2
     assert years[0].title == "2024"
     assert years[1].title == "2023"
+
+
+@pytest.mark.asyncio
+async def test_browse_tags_flat(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+    entries, total = await catalog.browse(TAGS_ID, "BrowseDirectChildren", 0, 50)
+    assert total == 1
+    assert entries[0].object_id == "tag:t1"
+    assert entries[0].title == "Landscape"
+    assert entries[0].parent_id == TAGS_ID
+
+
+@pytest.mark.asyncio
+async def test_browse_tags_grouped_auto(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    # Generate 105 tags across multiple letters and special characters
+    many_tags = [
+        ImmichTag(tag_id=f"t_hash_{i}", name=f"202{i}") for i in range(5)
+    ] + [
+        ImmichTag(tag_id=f"t_a_{i}", name=f"Apple {i}") for i in range(25)
+    ] + [
+        ImmichTag(tag_id="t_umlaut_a", name="Ägypten")
+    ] + [
+        ImmichTag(tag_id=f"t_b_{i}", name=f"Beach {i}") for i in range(30)
+    ] + [
+        ImmichTag(tag_id=f"t_k_{i}", name=f"Katze {i}") for i in range(44)
+    ]
+    assert len(many_tags) == 105
+    mock_immich_client.list_tags.return_value = many_tags
+
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+    entries, total = await catalog.browse(TAGS_ID, "BrowseDirectChildren", 0, 50)
+    assert total == 5  # "00. Alle Schlagwörter", "01. 0-9 & Symbole", "A", "B", "K"
+    assert entries[0].object_id == TAGS_ALL_ID
+    assert entries[0].title == "00. Alle Schlagwörter (105)"
+    assert entries[0].child_count == 105
+
+    assert entries[1].object_id == tag_group_object_id("#")
+    assert entries[1].title == "01. 0-9 & Symbole (5)"
+    assert entries[1].child_count == 5
+
+    assert entries[2].object_id == tag_group_object_id("A")
+    assert entries[2].title == "A (26)"  # 25 Apple + 1 Ägypten
+    assert entries[2].child_count == 26
+
+    assert entries[3].object_id == tag_group_object_id("B")
+    assert entries[3].title == "B (30)"
+
+    assert entries[4].object_id == tag_group_object_id("K")
+    assert entries[4].title == "K (44)"
+
+    # Browse into letter group A
+    a_entries, a_total = await catalog.browse(tag_group_object_id("A"), "BrowseDirectChildren", 0, 50)
+    assert a_total == 26
+    # Ägypten should be present and all parent_ids should point to tag_group:A
+    tag_titles = [e.title for e in a_entries]
+    assert "Ägypten" in tag_titles
+    assert all(e.parent_id == tag_group_object_id("A") for e in a_entries)
+
+    # Browse into "00. Alle Schlagwörter"
+    all_entries, all_total = await catalog.browse(TAGS_ALL_ID, "BrowseDirectChildren", 0, 200)
+    assert all_total == 105
+    assert len(all_entries) == 105
+    assert all(e.parent_id == TAGS_ALL_ID for e in all_entries)
+
+
+@pytest.mark.asyncio
+async def test_browse_tags_grouped_forced(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    from dataclasses import replace
+    settings_forced = replace(mock_settings, tags_group_by_letter="true")
+    # Only 2 tags, but forced grouping is active
+    mock_immich_client.list_tags.return_value = [
+        ImmichTag(tag_id="t1", name="Alpha"),
+        ImmichTag(tag_id="t2", name="Beta"),
+    ]
+    catalog = ContentCatalog(settings=settings_forced, immich_client=mock_immich_client)
+    entries, total = await catalog.browse(TAGS_ID, "BrowseDirectChildren", 0, 50)
+    assert total == 3  # "00. Alle Schlagwörter (2)", "A (1)", "B (1)"
+    assert entries[0].object_id == TAGS_ALL_ID
+    assert entries[1].object_id == tag_group_object_id("A")
+    assert entries[2].object_id == tag_group_object_id("B")
+
+
+@pytest.mark.asyncio
+async def test_browse_tag_assets(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+    entries, total = await catalog.browse("tag:t1", "BrowseDirectChildren", 0, 50)
+    assert total == 1
+    assert isinstance(entries[0], MediaItem)
+    assert entries[0].object_id == "asset:tag_a1"
+    assert entries[0].parent_id == "tag:t1"
+    assert entries[0].title == "001. Mountain.jpg"
+
+
+@pytest.mark.asyncio
+async def test_browse_tag_metadata(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    mock_immich_client.list_tags.return_value = [
+        ImmichTag(tag_id="t1", name="Architecture"),
+        ImmichTag(tag_id="t2", name="Art"),
+    ]
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+
+    # Tags container metadata
+    t_meta, _ = await catalog.browse(TAGS_ID, "BrowseMetadata", 0, 50)
+    assert len(t_meta) == 1
+    assert t_meta[0].object_id == TAGS_ID
+    assert t_meta[0].title == "Schlagwörter"
+
+    # All tags metadata
+    all_meta, _ = await catalog.browse(TAGS_ALL_ID, "BrowseMetadata", 0, 50)
+    assert len(all_meta) == 1
+    assert all_meta[0].object_id == TAGS_ALL_ID
+    assert all_meta[0].title == "00. Alle Schlagwörter (2)"
+
+    # Tag group metadata
+    grp_meta, _ = await catalog.browse(tag_group_object_id("A"), "BrowseMetadata", 0, 50)
+    assert len(grp_meta) == 1
+    assert grp_meta[0].object_id == tag_group_object_id("A")
+    assert grp_meta[0].title == "A (2)"
+
+    # Single tag metadata
+    single_meta, _ = await catalog.browse("tag:t1", "BrowseMetadata", 0, 50)
+    assert len(single_meta) == 1
+    assert single_meta[0].object_id == "tag:t1"
+    assert single_meta[0].title == "Architecture"
 

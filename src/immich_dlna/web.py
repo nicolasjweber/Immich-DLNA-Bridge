@@ -392,9 +392,9 @@ def create_app(
         except ValueError:
             start = 0
         try:
-            count = int(request.query.get("count", "50"))
+            count = int(request.query.get("count", "500"))
         except ValueError:
-            count = 50
+            count = 500
 
         entries, total = await content_directory_service.catalog.browse(
             object_id=object_id,

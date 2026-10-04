@@ -8,10 +8,12 @@ from immich_dlna.dlna.model import (
     parse_asset_id,
     parse_month_id,
     parse_person_id,
+    parse_tag_group_id,
     parse_tag_id,
     parse_year_all_id,
     parse_year_id,
     person_object_id,
+    tag_group_object_id,
     tag_object_id,
     year_all_object_id,
     year_object_id,
@@ -38,6 +40,16 @@ def test_id_formatting_and_parsing() -> None:
     t_obj_id = tag_object_id(tid)
     assert t_obj_id == "tag:tag-789"
     assert parse_tag_id(t_obj_id) == "tag-789"
+    assert parse_tag_id("tags:all") is None
+    assert parse_tag_id("tag_group:A") is None
+
+    # Tag Group
+    tg_obj_id = tag_group_object_id("A")
+    assert tg_obj_id == "tag_group:A"
+    assert parse_tag_group_id(tg_obj_id) == "A"
+    assert parse_tag_group_id(tag_group_object_id("#")) == "#"
+    assert parse_tag_group_id("tag:tag-789") is None
+    assert parse_tag_group_id("tags:all") is None
 
     # Year
     y_obj_id = year_object_id("2025")

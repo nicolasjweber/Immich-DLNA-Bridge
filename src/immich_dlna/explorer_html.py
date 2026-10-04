@@ -450,9 +450,10 @@ EXPLORER_HTML = """<!DOCTYPE html>
     <div id="media-section" style="display: none;">
       <div class="section-title">Photos & Videos <span id="media-count">0</span></div>
       <div class="media-grid" id="media-view"></div>
-      <div style="text-align: center; margin-top: 1.5rem;" id="load-more-container">
-        <button class="btn btn-primary" id="btn-load-more" style="display: none;">Load More</button>
-      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 1.5rem; display: none;" id="load-more-container">
+      <button class="btn btn-primary" id="btn-load-more" style="display: none;">Load More</button>
     </div>
 
     <div id="empty-state" class="empty-state" style="display: none;">
@@ -477,11 +478,11 @@ EXPLORER_HTML = """<!DOCTYPE html>
   <script>
     const state = {
       history: [{ id: "0", title: "Home" }],
-      currentItems: [],
+      currentContainers: [],
       currentMediaItems: [],
       lightboxIndex: -1,
       pageStart: 0,
-      pageSize: 50,
+      pageSize: 100,
       totalMatches: 0
     };
 
@@ -490,6 +491,7 @@ EXPLORER_HTML = """<!DOCTYPE html>
     const mediaViewEl = document.getElementById("media-view");
     const containerSectionEl = document.getElementById("container-section");
     const mediaSectionEl = document.getElementById("media-section");
+    const loadMoreContainerEl = document.getElementById("load-more-container");
     const emptyStateEl = document.getElementById("empty-state");
     const loadingEl = document.getElementById("loading");
     const containerCountEl = document.getElementById("container-count");
@@ -529,7 +531,9 @@ EXPLORER_HTML = """<!DOCTYPE html>
         loadingEl.style.display = "block";
         containerSectionEl.style.display = "none";
         mediaSectionEl.style.display = "none";
+        loadMoreContainerEl.style.display = "none";
         emptyStateEl.style.display = "none";
+        state.currentContainers = [];
         state.currentMediaItems = [];
         mediaViewEl.innerHTML = "";
         containersViewEl.innerHTML = "";
@@ -543,53 +547,52 @@ EXPLORER_HTML = """<!DOCTYPE html>
         state.pageStart = start;
         state.totalMatches = data.total || 0;
 
-        // Render Containers (only on initial load)
-        if (!append) {
-          const containers = data.containers || [];
-          containerCountEl.textContent = containers.length;
-          if (containers.length > 0) {
-            containerSectionEl.style.display = "block";
-            containers.forEach(c => {
-              const card = document.createElement("div");
-              card.className = "container-card";
-              card.onclick = () => {
-                state.history.push({ id: c.id, title: c.title });
-                navigateToCurrent();
+        // Render Containers
+        const containers = data.containers || [];
+        if (containers.length > 0) {
+          containerSectionEl.style.display = "block";
+          containers.forEach(c => {
+            state.currentContainers.push(c);
+            const card = document.createElement("div");
+            card.className = "container-card";
+            card.onclick = () => {
+              state.history.push({ id: c.id, title: c.title });
+              navigateToCurrent();
+            };
+
+            // Determine icon or cover
+            if (c.art) {
+              const isPerson = c.id.startsWith("person:") || c.id.includes(":person:");
+              const img = document.createElement("img");
+              img.className = isPerson ? "folder-art" : "folder-art square";
+              img.src = (c.art.startsWith(window.location.origin) || c.art.startsWith("/"))
+                ? c.art
+                : `/api/proxy?url=${encodeURIComponent(c.art)}`;
+              img.loading = "lazy";
+              img.onerror = () => {
+                img.replaceWith(createFallbackIcon(c.id));
               };
+              card.appendChild(img);
+            } else {
+              card.appendChild(createFallbackIcon(c.id));
+            }
 
-              // Determine icon or cover
-              if (c.art) {
-                const isPerson = c.id.startsWith("person:") || c.id.includes(":person:");
-                const img = document.createElement("img");
-                img.className = isPerson ? "folder-art" : "folder-art square";
-                img.src = (c.art.startsWith(window.location.origin) || c.art.startsWith("/"))
-                  ? c.art
-                  : `/api/proxy?url=${encodeURIComponent(c.art)}`;
-                img.loading = "lazy";
-                img.onerror = () => {
-                  img.replaceWith(createFallbackIcon(c.id));
-                };
-                card.appendChild(img);
-              } else {
-                card.appendChild(createFallbackIcon(c.id));
-              }
+            const titleEl = document.createElement("div");
+            titleEl.className = "container-title";
+            titleEl.textContent = c.title;
+            card.appendChild(titleEl);
 
-              const titleEl = document.createElement("div");
-              titleEl.className = "container-title";
-              titleEl.textContent = c.title;
-              card.appendChild(titleEl);
+            if (c.childCount) {
+              const subEl = document.createElement("div");
+              subEl.className = "container-sub";
+              subEl.textContent = `${c.childCount} items`;
+              card.appendChild(subEl);
+            }
 
-              if (c.childCount) {
-                const subEl = document.createElement("div");
-                subEl.className = "container-sub";
-                subEl.textContent = `${c.childCount} items`;
-                card.appendChild(subEl);
-              }
-
-              containersViewEl.appendChild(card);
-            });
-          }
+            containersViewEl.appendChild(card);
+          });
         }
+        containerCountEl.textContent = state.currentContainers.length;
 
         // Render Media Items
         const items = data.items || [];
@@ -633,18 +636,29 @@ EXPLORER_HTML = """<!DOCTYPE html>
         }
 
         mediaCountEl.textContent = state.currentMediaItems.length;
-        itemCountLabelEl.textContent = state.totalMatches > 0 
-          ? `Showing ${state.currentMediaItems.length} of ${state.totalMatches} items`
-          : "";
+        const totalLoaded = state.currentContainers.length + state.currentMediaItems.length;
+        if (state.totalMatches > 0) {
+          if (state.currentContainers.length > 0 && state.currentMediaItems.length === 0) {
+            itemCountLabelEl.textContent = `Showing ${state.currentContainers.length} of ${state.totalMatches} folders`;
+          } else if (state.currentContainers.length === 0 && state.currentMediaItems.length > 0) {
+            itemCountLabelEl.textContent = `Showing ${state.currentMediaItems.length} of ${state.totalMatches} items`;
+          } else {
+            itemCountLabelEl.textContent = `Showing ${totalLoaded} of ${state.totalMatches} items`;
+          }
+        } else {
+          itemCountLabelEl.textContent = "";
+        }
 
         // Load More button
-        if (state.currentMediaItems.length < state.totalMatches) {
+        if (totalLoaded < state.totalMatches) {
+          loadMoreContainerEl.style.display = "block";
           btnLoadMore.style.display = "inline-block";
         } else {
+          loadMoreContainerEl.style.display = "none";
           btnLoadMore.style.display = "none";
         }
 
-        if ((data.containers || []).length === 0 && state.currentMediaItems.length === 0) {
+        if (state.currentContainers.length === 0 && state.currentMediaItems.length === 0) {
           emptyStateEl.style.display = "block";
         }
 
@@ -662,7 +676,7 @@ EXPLORER_HTML = """<!DOCTYPE html>
       else if (id.startsWith("person:")) el.textContent = "👤";
       else if (id === "favorites") el.textContent = "⭐";
       else if (id === "albums" || id.startsWith("album:")) el.textContent = "🖼️";
-      else if (id === "tags" || id.startsWith("tag:")) el.textContent = "🏷️";
+      else if (id === "tags" || id.startsWith("tag:") || id.startsWith("tag_group:") || id === "tags:all") el.textContent = "🏷️";
       else if (id === "years" || id.startsWith("year:") || id.startsWith("month:")) el.textContent = "📅";
       else el.textContent = "📁";
       return el;
@@ -733,7 +747,8 @@ EXPLORER_HTML = """<!DOCTYPE html>
     document.getElementById("btn-refresh").onclick = () => navigateToCurrent();
     btnLoadMore.onclick = () => {
       const current = state.history[state.history.length - 1];
-      loadFolder(current.id, state.currentMediaItems.length, true);
+      const totalLoaded = state.currentContainers.length + state.currentMediaItems.length;
+      loadFolder(current.id, totalLoaded, true);
     };
 
     // Initial load

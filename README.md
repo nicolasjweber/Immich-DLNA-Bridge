@@ -26,6 +26,7 @@ Unlike baseline DLNA servers that only offer a flat timeline and albums, this br
   - Direct access to all video clips stored in Immich in a single, convenient folder.
 - **Favorites & Tags**:
   - Instant access to starred / favorite media and photos organized by Immich tags.
+  - **Tag Letter Grouping**: For large tag collections, tags are automatically organized into letter folders (`A`, `B`, ..., `Z`), plus a `00. Alle Schlagwörter` folder. This completely avoids item truncation on Smart TVs with strict limits (such as Samsung Tizen's 200-item folder cap).
 - **Smart TV & Universal Client Optimizations**:
   - **Zero-Padded Chronological Ordering**: Many Smart TVs (such as Samsung Tizen) force alphabetical (A-Z) sorting on all folder contents. The bridge intelligently prefixes entries with zero-padded indices (`01. 2026`, `001. IMG_0001.jpg`, `01. Alice`), preserving the natural chronological and popularity order.
   - **Container Cover Art**: Emits UPnP `<upnp:albumArtURI dlna:profileID="JPEG_TN">` and `<upnp:icon>` on folders (face crops for people, covers for albums).
@@ -63,9 +64,12 @@ Immich (Root: 0)
 │       ├── Alice
 │       └── Bob
 ├── Favoriten                   -> All starred / favorite assets
-├── Schlagwörter                -> Browse by Immich tags
-│   ├── Landscapes
-│   └── Pets
+├── Schlagwörter                -> Browse by Immich tags (letter folders for large collections)
+│   ├── 00. Alle Schlagwörter (443)
+│   ├── 01. 0-9 & Symbole (4)
+│   ├── A (24)
+│   ├── B (30)
+│   └── ...
 └── Zeitleiste (Alle Fotos)     -> Optional full flat media stream (disabled by default for TV speed)
 ```
 
@@ -186,6 +190,7 @@ The bridge includes an integrated web explorer for testing and browsing your lib
 | `IMMICH_DLNA_ASSET_TITLE_FORMAT` | `index_filename` | Title format for assets: `index_filename`, `index_date_filename`, or `raw`. |
 | `IMMICH_DLNA_ENABLE_FAVORITES` | `true` | Enables the "Favoriten" container. |
 | `IMMICH_DLNA_ENABLE_TAGS` | `true` | Enables the "Schlagwörter" container. |
+| `IMMICH_DLNA_TAGS_GROUP_BY_LETTER` | `auto` | Group tags into letter subfolders (`auto` when >100 tags, `true`, or `false`). Prevents TV 200-item cutoff. |
 | `IMMICH_DLNA_IMAGE_QUALITY` | `auto` | `auto` (serves JPEG previews for HEIC/RAW/WebP, original for JPEG/PNG), `preview`, or `original`. |
 | `IMMICH_DLNA_PREFER_JPEG` | `true` | Advertises `image/jpeg` with DLNA profile `JPEG_LRG` for TV compatibility. |
 | `IMMICH_DLNA_TRANSCODE_WEBP_TO_JPEG` | `true` | Automatically converts WebP to JPEG on the fly if Immich outputs WebP. |

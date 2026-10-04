@@ -57,6 +57,8 @@ PEOPLE_PHOTOS_CONTAINER = Container(object_id=PEOPLE_PHOTOS_ID, parent_id=PEOPLE
 PEOPLE_NAME_CONTAINER = Container(object_id=PEOPLE_NAME_ID, parent_id=PEOPLE_ID, title="Nach Name (A-Z)")
 FAVORITES_CONTAINER = Container(object_id=FAVORITES_ID, parent_id=ROOT_ID, title="Favoriten")
 TAGS_CONTAINER = Container(object_id=TAGS_ID, parent_id=ROOT_ID, title="Schlagwörter")
+TAGS_ALL_ID = "tags:all"
+TAGS_ALL_CONTAINER = Container(object_id=TAGS_ALL_ID, parent_id=TAGS_ID, title="00. Alle Schlagwörter")
 
 
 def album_object_id(album_id: str) -> str:
@@ -86,10 +88,21 @@ def tag_object_id(tag_id: str) -> str:
 
 
 def parse_tag_id(object_id: str) -> str | None:
-    if not object_id.startswith("tag:"):
+    if not object_id.startswith("tag:") or object_id.startswith("tag_group:"):
         return None
     tag_id = object_id.split(":", 1)[1]
     return tag_id or None
+
+
+def tag_group_object_id(group: str) -> str:
+    return f"tag_group:{group}"
+
+
+def parse_tag_group_id(object_id: str) -> str | None:
+    if not object_id.startswith("tag_group:"):
+        return None
+    group = object_id.split(":", 1)[1]
+    return group or None
 
 
 def year_object_id(year: str) -> str:

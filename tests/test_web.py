@@ -381,3 +381,40 @@ async def test_samsung_soap_actions(mock_settings: Settings, mock_immich_client:
     finally:
         await client.close()
 
+
+@pytest.mark.asyncio
+async def test_explorer_endpoints(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+    cd_service = ContentDirectoryService(catalog=catalog)
+    cm_service = ConnectionManagerService()
+    metrics = MetricsRegistry()
+
+    app = create_app(
+        settings=mock_settings,
+        content_directory_service=cd_service,
+        connection_manager_service=cm_service,
+        immich_client=mock_immich_client,
+        metrics=metrics,
+    )
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        # Explore HTML UI
+        resp_ui = await client.get("/explore")
+        assert resp_ui.status == 200
+        text = await resp_ui.text()
+        assert "Immich Media Explorer" in text
+        assert "load-more-container" in text
+
+        # API browse root (default count=500)
+        resp_api = await client.get("/api/browse?id=0")
+        assert resp_api.status == 200
+        data = await resp_api.json()
+        assert data["id"] == "0"
+        assert data["total"] > 0
+        assert len(data["containers"]) == data["total"]
+    finally:
+        await client.close()
+
+

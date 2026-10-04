@@ -86,6 +86,7 @@ class Settings:
     enable_favorites: bool = True
     enable_videos: bool = True
     enable_tags: bool = True
+    tags_group_by_letter: str = "auto"
     enable_years: bool = True
     enable_year_all: bool = True
     enable_albums: bool = True
@@ -145,6 +146,14 @@ class Settings:
         if asset_title_format not in {"index_filename", "index_date_filename", "raw"}:
             asset_title_format = "index_filename"
 
+        tags_group_env = os.getenv("IMMICH_DLNA_TAGS_GROUP_BY_LETTER", "auto").strip().lower()
+        if tags_group_env in {"1", "true", "yes", "on"}:
+            tags_group_by_letter = "true"
+        elif tags_group_env in {"0", "false", "no", "off"}:
+            tags_group_by_letter = "false"
+        else:
+            tags_group_by_letter = "auto"
+
         return cls(
             immich_url=immich_url,
             immich_api_token=immich_api_token,
@@ -173,6 +182,7 @@ class Settings:
             enable_favorites=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_FAVORITES"), True),
             enable_videos=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_VIDEOS"), True),
             enable_tags=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_TAGS"), True),
+            tags_group_by_letter=tags_group_by_letter,
             enable_years=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_YEARS"), True),
             enable_year_all=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_YEAR_ALL"), True),
             enable_albums=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_ALBUMS"), True),

@@ -20,6 +20,8 @@ from immich_dlna.dlna.model import (
     PHOTO_ALBUM_CONTAINER_CLASS,
     ROOT_CONTAINER,
     ROOT_ID,
+    TAGS_ALL_CONTAINER,
+    TAGS_ALL_ID,
     TAGS_CONTAINER,
     TAGS_ID,
     TIMELINE_CONTAINER,
@@ -39,15 +41,18 @@ from immich_dlna.dlna.model import (
     parse_asset_id,
     parse_month_id,
     parse_person_id,
+    parse_tag_group_id,
     parse_tag_id,
     parse_year_all_id,
     parse_year_id,
     person_object_id,
+    tag_group_object_id,
     tag_object_id,
     year_all_object_id,
     year_object_id,
 )
-from immich_dlna.immich import ImmichAsset, ImmichClient, ImmichError
+import unicodedata
+from immich_dlna.immich import ImmichAsset, ImmichClient, ImmichError, ImmichTag
 
 _STANDARD_TV_IMAGE_MIMES = frozenset({"image/jpeg", "image/jpg", "image/png"})
 
@@ -78,12 +83,32 @@ def _format_month_title(time_bucket: str) -> str:
         return time_bucket[:7]
 
 
+def _tag_letter_group(name: str) -> str:
+    cleaned = name.strip()
+    if not cleaned:
+        return "#"
+    first_char = cleaned.replace("ß", "s")[0]
+    normalized = unicodedata.normalize("NFKD", first_char)
+    base_char = normalized[0].upper() if normalized else "#"
+    if "A" <= base_char <= "Z":
+        return base_char
+    return "#"
+
+
 class ContentCatalog:
     def __init__(self, settings: Settings, immich_client: ImmichClient) -> None:
         self.settings = settings
         self.immich_client = immich_client
         self.logger = logging.getLogger("immich_dlna.catalog")
         self._asset_parent_cache: dict[str, str] = {}
+
+    def _should_group_tags(self, total_tags: int) -> bool:
+        if self.settings.tags_group_by_letter == "true":
+            return True
+        if self.settings.tags_group_by_letter == "false":
+            return False
+        # "auto": group if more than 100 tags to avoid hitting client item limits (e.g. Samsung TV 200 item cap)
+        return total_tags > 100
 
     def _root_containers(self) -> list[Container]:
         containers: list[Container] = []
@@ -127,7 +152,10 @@ class ContentCatalog:
             all_entries = self._empty_fallback_for(object_id)
 
         total_matches = len(all_entries)
-        paged_entries = all_entries[starting_index : starting_index + requested_count]
+        if requested_count == 0:
+            paged_entries = all_entries[starting_index:]
+        else:
+            paged_entries = all_entries[starting_index : starting_index + requested_count]
         return paged_entries, total_matches
 
     async def _browse_metadata(self, object_id: str) -> BrowseEntry | None:
@@ -197,6 +225,33 @@ class ContentCatalog:
                         album_art_uri=cover_url,
                     )
             return None
+
+        # All tags metadata
+        if object_id == TAGS_ALL_ID:
+            tags = await self.immich_client.list_tags()
+            return Container(
+                object_id=TAGS_ALL_ID,
+                parent_id=TAGS_ID,
+                title=f"00. Alle Schlagwörter ({len(tags)})",
+                child_count=len(tags),
+            )
+
+        # Tag letter group metadata
+        tag_group = parse_tag_group_id(object_id)
+        if tag_group is not None:
+            tags = await self.immich_client.list_tags()
+            group_tags = [t for t in tags if _tag_letter_group(t.name) == tag_group]
+            title = (
+                f"01. 0-9 & Symbole ({len(group_tags)})"
+                if tag_group == "#"
+                else f"{tag_group} ({len(group_tags)})"
+            )
+            return Container(
+                object_id=tag_group_object_id(tag_group),
+                parent_id=TAGS_ID,
+                title=title,
+                child_count=len(group_tags),
+            )
 
         # Tag metadata
         tag_id = parse_tag_id(object_id)
@@ -345,6 +400,42 @@ class ContentCatalog:
         # ==========================
         if object_id == TAGS_ID:
             tags = await self.immich_client.list_tags()
+            if self._should_group_tags(len(tags)):
+                buckets: dict[str, list[ImmichTag]] = {}
+                for tag in tags:
+                    letter = _tag_letter_group(tag.name)
+                    buckets.setdefault(letter, []).append(tag)
+
+                entries: list[BrowseEntry] = [
+                    Container(
+                        object_id=TAGS_ALL_ID,
+                        parent_id=TAGS_ID,
+                        title=f"00. Alle Schlagwörter ({len(tags)})",
+                        child_count=len(tags),
+                    )
+                ]
+                if "#" in buckets:
+                    hash_tags = buckets["#"]
+                    entries.append(
+                        Container(
+                            object_id=tag_group_object_id("#"),
+                            parent_id=TAGS_ID,
+                            title=f"01. 0-9 & Symbole ({len(hash_tags)})",
+                            child_count=len(hash_tags),
+                        )
+                    )
+                for letter in sorted(k for k in buckets.keys() if k != "#"):
+                    letter_tags = buckets[letter]
+                    entries.append(
+                        Container(
+                            object_id=tag_group_object_id(letter),
+                            parent_id=TAGS_ID,
+                            title=f"{letter} ({len(letter_tags)})",
+                            child_count=len(letter_tags),
+                        )
+                    )
+                return entries
+
             return [
                 Container(
                     object_id=tag_object_id(tag.tag_id),
@@ -352,6 +443,32 @@ class ContentCatalog:
                     title=tag.name,
                 )
                 for tag in tags
+            ]
+
+        if object_id == TAGS_ALL_ID:
+            tags = await self.immich_client.list_tags()
+            return [
+                Container(
+                    object_id=tag_object_id(tag.tag_id),
+                    parent_id=TAGS_ALL_ID,
+                    title=tag.name,
+                )
+                for tag in tags
+            ]
+
+        tag_group = parse_tag_group_id(object_id)
+        if tag_group is not None:
+            tags = await self.immich_client.list_tags()
+            group_tags = [t for t in tags if _tag_letter_group(t.name) == tag_group]
+            group_tags.sort(key=lambda t: t.name.lower())
+            parent_id = tag_group_object_id(tag_group)
+            return [
+                Container(
+                    object_id=tag_object_id(tag.tag_id),
+                    parent_id=parent_id,
+                    title=tag.name,
+                )
+                for tag in group_tags
             ]
 
         tag_id = parse_tag_id(object_id)
