@@ -94,6 +94,9 @@ async def test_health_and_device_xml(mock_settings: Settings, mock_immich_client
         assert resp_xml.status == 200
         text = await resp_xml.text()
         assert "Immich DLNA Web Test" in text
+        assert "Immich DLNA Bridge" in text
+        assert "https://github.com/nicolasjweber/Immich-DLNA-Bridge" in text
+        assert "modelURL" in text
         assert "urn:schemas-upnp-org:device:MediaServer:1" in text
         assert "urn:schemas-upnp-org:service:ContentDirectory:1" in text
         assert "X_DLNACAP" in text

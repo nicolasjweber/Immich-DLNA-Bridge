@@ -16,7 +16,13 @@ def test_settings_from_env_defaults() -> None:
     with mock.patch.dict(os.environ, env, clear=True):
         settings = Settings.from_env()
         assert settings.immich_url == "http://192.168.1.50:2283/api"
-        assert settings.immich_api_token == "secret-token"
+        assert settings.friendly_name == "Immich"
+        assert settings.manufacturer == "Immich DLNA Bridge"
+        assert settings.manufacturer_url == "https://github.com/nicolasjweber/Immich-DLNA-Bridge"
+        assert settings.model_name == "Immich DLNA Bridge"
+        assert settings.model_description == "Immich DLNA Bridge for Smart TVs & Media Players"
+        assert settings.model_number == "1.0.0"
+        assert settings.model_url == "https://github.com/nicolasjweber/Immich-DLNA-Bridge"
         assert settings.enable_timeline is False
         assert settings.enable_albums is True
         assert settings.enable_tags is True

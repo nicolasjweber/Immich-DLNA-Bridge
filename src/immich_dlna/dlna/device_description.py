@@ -37,11 +37,12 @@ def build_device_description(settings: Settings) -> str:
     device = ET.SubElement(root, "device")
     ET.SubElement(device, "deviceType").text = "urn:schemas-upnp-org:device:MediaServer:1"
     ET.SubElement(device, "friendlyName").text = settings.friendly_name
-    ET.SubElement(device, "manufacturer").text = "Immich-DLNA"
-    ET.SubElement(device, "manufacturerURL").text = "https://github.com/immich-app/immich"
-    ET.SubElement(device, "modelDescription").text = "Immich DLNA Bridge for Smart TVs"
-    ET.SubElement(device, "modelName").text = "Immich-DLNA"
-    ET.SubElement(device, "modelNumber").text = "1.0"
+    ET.SubElement(device, "manufacturer").text = settings.manufacturer
+    ET.SubElement(device, "manufacturerURL").text = settings.manufacturer_url
+    ET.SubElement(device, "modelDescription").text = settings.model_description
+    ET.SubElement(device, "modelName").text = settings.model_name
+    ET.SubElement(device, "modelNumber").text = settings.model_number
+    ET.SubElement(device, "modelURL").text = settings.model_url
     ET.SubElement(device, "serialNumber").text = settings.server_uuid
     ET.SubElement(device, "UDN").text = f"uuid:{settings.server_uuid}"
     ET.SubElement(device, f"{{{DLNA_DEVICE_NS}}}X_DLNADOC").text = "DMS-1.50"

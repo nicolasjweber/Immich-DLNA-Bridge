@@ -67,6 +67,12 @@ class Settings:
     http_port: int = 8200
     base_url: str = "http://127.0.0.1:8200"
     friendly_name: str = "Immich"
+    manufacturer: str = "Immich DLNA Bridge"
+    manufacturer_url: str = "https://github.com/nicolasjweber/Immich-DLNA-Bridge"
+    model_name: str = "Immich DLNA Bridge"
+    model_description: str = "Immich DLNA Bridge for Smart TVs & Media Players"
+    model_number: str = "1.0.0"
+    model_url: str = "https://github.com/nicolasjweber/Immich-DLNA-Bridge"
     server_uuid: str = ""
     log_level: str = "INFO"
     ssdp_multicast_host: str = "239.255.255.250"
@@ -154,6 +160,22 @@ class Settings:
         else:
             tags_group_by_letter = "auto"
 
+        manufacturer = os.getenv("IMMICH_DLNA_MANUFACTURER", "Immich DLNA Bridge").strip() or "Immich DLNA Bridge"
+        manufacturer_url = (
+            os.getenv("IMMICH_DLNA_MANUFACTURER_URL", "https://github.com/nicolasjweber/Immich-DLNA-Bridge").strip()
+            or "https://github.com/nicolasjweber/Immich-DLNA-Bridge"
+        )
+        model_name = os.getenv("IMMICH_DLNA_MODEL_NAME", "Immich DLNA Bridge").strip() or "Immich DLNA Bridge"
+        model_description = (
+            os.getenv("IMMICH_DLNA_MODEL_DESCRIPTION", "Immich DLNA Bridge for Smart TVs & Media Players").strip()
+            or "Immich DLNA Bridge for Smart TVs & Media Players"
+        )
+        model_number = os.getenv("IMMICH_DLNA_MODEL_NUMBER", "1.0.0").strip() or "1.0.0"
+        model_url = (
+            os.getenv("IMMICH_DLNA_MODEL_URL", "https://github.com/nicolasjweber/Immich-DLNA-Bridge").strip()
+            or "https://github.com/nicolasjweber/Immich-DLNA-Bridge"
+        )
+
         return cls(
             immich_url=immich_url,
             immich_api_token=immich_api_token,
@@ -162,6 +184,12 @@ class Settings:
             http_port=http_port,
             base_url=base_url,
             friendly_name=os.getenv("IMMICH_DLNA_FRIENDLY_NAME", "Immich").strip() or "Immich",
+            manufacturer=manufacturer,
+            manufacturer_url=manufacturer_url,
+            model_name=model_name,
+            model_description=model_description,
+            model_number=model_number,
+            model_url=model_url,
             server_uuid=clean_uuid,
             log_level=os.getenv("IMMICH_DLNA_LOG_LEVEL", "INFO").strip().upper(),
             ssdp_multicast_host=os.getenv("IMMICH_DLNA_SSDP_MULTICAST_HOST", "239.255.255.250").strip(),
