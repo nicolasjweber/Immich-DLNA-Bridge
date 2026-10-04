@@ -10,6 +10,8 @@ from immich_dlna.dlna.model import (
     ALBUMS_ID,
     FAVORITES_CONTAINER,
     FAVORITES_ID,
+    FOLDERS_CONTAINER,
+    FOLDERS_ID,
     IMAGE_CLASS,
     PEOPLE_CONTAINER,
     PEOPLE_ID,
@@ -36,9 +38,11 @@ from immich_dlna.dlna.model import (
     MediaItem,
     album_object_id,
     asset_object_id,
+    folder_object_id,
     month_object_id,
     parse_album_id,
     parse_asset_id,
+    parse_folder_path,
     parse_month_id,
     parse_person_id,
     parse_tag_group_id,
@@ -95,12 +99,106 @@ def _tag_letter_group(name: str) -> str:
     return "#"
 
 
+class FolderNode:
+    def __init__(self, name: str, path: str, parent: FolderNode | None = None) -> None:
+        self.name = name
+        self.path = path
+        self.parent = parent
+        self.children: dict[str, FolderNode] = {}
+        self.has_assets: bool = False
+
+    def collapse(self) -> None:
+        # Collapse intermediate single-child empty directories
+        while (
+            len(self.children) == 1
+            and not self.has_assets
+            and not next(iter(self.children.values())).has_assets
+            and next(iter(self.children.values())).children
+        ):
+            child = next(iter(self.children.values()))
+            self.name = f"{self.name}/{child.name}" if self.name else child.name
+            self.path = child.path
+            self.has_assets = child.has_assets
+            self.children = child.children
+            for c in self.children.values():
+                c.parent = self
+        for child in list(self.children.values()):
+            child.collapse()
+
+
+class FolderTree:
+    def __init__(self, root: FolderNode, nodes_by_path: dict[str, FolderNode]) -> None:
+        self.root = root
+        self.nodes_by_path = nodes_by_path
+
+    @classmethod
+    def from_paths(cls, paths: list[str]) -> FolderTree:
+        virtual_root = FolderNode(name="", path="")
+        for p in paths:
+            raw_path = p.strip()
+            if not raw_path:
+                continue
+            normalized = raw_path.replace("\\", "/").rstrip("/")
+            if not normalized:
+                continue
+
+            is_posix = normalized.startswith("/")
+            segments = [s for s in normalized.split("/") if s]
+            if not segments:
+                continue
+
+            current = virtual_root
+            running_path = ""
+            for seg in segments:
+                if is_posix:
+                    running_path = f"{running_path}/{seg}" if running_path else f"/{seg}"
+                else:
+                    running_path = f"{running_path}/{seg}" if running_path else seg
+                if seg not in current.children:
+                    current.children[seg] = FolderNode(name=seg, path=running_path, parent=current)
+                current = current.children[seg]
+            current.has_assets = True
+
+        virtual_root.collapse()
+
+        nodes_by_path: dict[str, FolderNode] = {}
+
+        def _index(node: FolderNode) -> None:
+            if node.path:
+                nodes_by_path[node.path] = node
+            for child in node.children.values():
+                _index(child)
+
+        _index(virtual_root)
+
+        return cls(root=virtual_root, nodes_by_path=nodes_by_path)
+
+
 class ContentCatalog:
     def __init__(self, settings: Settings, immich_client: ImmichClient) -> None:
         self.settings = settings
         self.immich_client = immich_client
         self.logger = logging.getLogger("immich_dlna.catalog")
         self._asset_parent_cache: dict[str, str] = {}
+        self._folder_tree: FolderTree | None = None
+        self._folder_tree_time: float = 0.0
+
+    async def _get_folder_tree(self) -> FolderTree:
+        try:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+        except RuntimeError:
+            now = 0.0
+        if (
+            self._folder_tree is not None
+            and (now - self._folder_tree_time) < self.settings.metadata_cache_ttl_seconds
+        ):
+            return self._folder_tree
+        paths = await self.immich_client.list_folder_unique_paths()
+        tree = FolderTree.from_paths(paths)
+        self._folder_tree = tree
+        self._folder_tree_time = now
+        return tree
 
     def _should_group_tags(self, total_tags: int) -> bool:
         if self.settings.tags_group_by_letter == "true":
@@ -116,6 +214,8 @@ class ContentCatalog:
             containers.append(TIMELINE_CONTAINER)
         if self.settings.enable_years:
             containers.append(YEARS_CONTAINER)
+        if self.settings.enable_folders:
+            containers.append(FOLDERS_CONTAINER)
         if self.settings.enable_albums:
             containers.append(ALBUMS_CONTAINER)
         if self.settings.enable_videos:
@@ -173,6 +273,16 @@ class ContentCatalog:
             return TIMELINE_CONTAINER
         if object_id == YEARS_ID:
             return YEARS_CONTAINER
+        if object_id == FOLDERS_ID:
+            if not self.settings.enable_folders:
+                return None
+            tree = await self._get_folder_tree()
+            return Container(
+                object_id=FOLDERS_ID,
+                parent_id=ROOT_ID,
+                title="Ordner",
+                child_count=len(tree.root.children),
+            )
         if object_id in {ALBUMS_ID, "2"}:
             if not self.settings.enable_albums:
                 return None
@@ -294,6 +404,30 @@ class ContentCatalog:
                 title=_format_month_title(month),
             )
 
+        # Folder metadata
+        folder_path = parse_folder_path(object_id)
+        if folder_path is not None:
+            tree = await self._get_folder_tree()
+            node = tree.nodes_by_path.get(folder_path)
+            if node is not None:
+                parent_id = (
+                    FOLDERS_ID
+                    if (node.parent is None or node.parent is tree.root)
+                    else folder_object_id(node.parent.path)
+                )
+                return Container(
+                    object_id=object_id,
+                    parent_id=parent_id,
+                    title=node.name,
+                    child_count=len(node.children),
+                )
+            fallback_title = folder_path.replace("\\", "/").rstrip("/").split("/")[-1] or folder_path
+            return Container(
+                object_id=object_id,
+                parent_id=FOLDERS_ID,
+                title=fallback_title,
+            )
+
         # Asset metadata
         asset_id = parse_asset_id(object_id)
         if asset_id is not None:
@@ -310,6 +444,59 @@ class ContentCatalog:
 
         if object_id in {TIMELINE_ID, "1"}:
             return []
+
+        # ==========================
+        # Folders container
+        # ==========================
+        if object_id == FOLDERS_ID:
+            if not self.settings.enable_folders:
+                return []
+            tree = await self._get_folder_tree()
+            entries: list[BrowseEntry] = []
+            sorted_children = sorted(tree.root.children.values(), key=lambda c: c.name.lower())
+            for child in sorted_children:
+                entries.append(
+                    Container(
+                        object_id=folder_object_id(child.path),
+                        parent_id=FOLDERS_ID,
+                        title=child.name,
+                        child_count=len(child.children),
+                    )
+                )
+            if tree.root.has_assets and tree.root.path:
+                assets = await self.immich_client.get_folder_assets(tree.root.path)
+                total = len(assets)
+                for idx, asset in enumerate(assets, start=1):
+                    entries.append(self._to_media_item(asset, FOLDERS_ID, index=idx, total_count=total))
+            return entries
+
+        folder_path = parse_folder_path(object_id)
+        if folder_path is not None:
+            tree = await self._get_folder_tree()
+            node = tree.nodes_by_path.get(folder_path)
+            folder_entries: list[BrowseEntry] = []
+            if node is not None:
+                sorted_children = sorted(node.children.values(), key=lambda c: c.name.lower())
+                for child in sorted_children:
+                    folder_entries.append(
+                        Container(
+                            object_id=folder_object_id(child.path),
+                            parent_id=object_id,
+                            title=child.name,
+                            child_count=len(child.children),
+                        )
+                    )
+                if node.has_assets:
+                    assets = await self.immich_client.get_folder_assets(folder_path)
+                    total = len(assets)
+                    for idx, asset in enumerate(assets, start=1):
+                        folder_entries.append(self._to_media_item(asset, object_id, index=idx, total_count=total))
+            else:
+                assets = await self.immich_client.get_folder_assets(folder_path)
+                total = len(assets)
+                for idx, asset in enumerate(assets, start=1):
+                    folder_entries.append(self._to_media_item(asset, object_id, index=idx, total_count=total))
+            return folder_entries
 
         # ==========================
         # People container

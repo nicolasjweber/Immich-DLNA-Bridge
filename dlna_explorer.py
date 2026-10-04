@@ -701,6 +701,7 @@ HTML_PAGE = """<!DOCTYPE html>
       else if (id === "albums" || id.startsWith("album:")) el.textContent = "🖼️";
       else if (id === "tags" || id.startsWith("tag:") || id.startsWith("tag_group:") || id === "tags:all") el.textContent = "🏷️";
       else if (id === "years" || id.startsWith("year:") || id.startsWith("month:")) el.textContent = "📅";
+      else if (id === "folders" || id.startsWith("folder:")) el.textContent = "📁";
       else el.textContent = "📁";
       return el;
     }

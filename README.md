@@ -18,6 +18,10 @@ Unlike baseline DLNA servers that only offer a flat timeline and albums, this br
   - Large photo libraries (10,000+ pictures) can lag TV remotes when browsed as a single flat list.
   - Browse neatly categorized folders: `Zeitleiste` -> `01. 2026` -> `01. Januar 2026` -> photos.
   - Includes an optional `00. Ganzes Jahr <year>` subfolder inside each year to view the entire year at once.
+- **Folder View ("Ordner")**:
+  - Direct filesystem folder view for external libraries mounted into Immich (e.g. NAS shares).
+  - Browse photos by your folder names (e.g. events, trips, holidays) rather than only calendar months — ideal for multi-day events that cross month boundaries.
+  - Automatically collapses intermediate single-child directory chains leading to your library mountpoints (matching Immich Web's folder tree behavior).
 - **Albums**:
   - Full album browsing (both owned and shared partner albums).
   - Album cover art is automatically displayed on the TV container tile.
@@ -52,6 +56,12 @@ Immich (Root: 0)
 │   │   ├── 00. Ganzes Jahr 2025
 │   │   ├── 12. Dezember 2025
 │   │   └── 08. August 2025
+├── Ordner                      -> Direct filesystem folder view (External libraries, event folders)
+│   ├── mynas_photos
+│   │   ├── 2026-05 Birthday
+│   │   └── 2026-06 Summer Vacation
+│   └── mynas_camcorder
+│       └── 2026-07 Roadtrip
 ├── Alben                       -> All owned and shared albums (with album covers)
 │   ├── Summer Vacation 2025
 │   └── Family Reunion
@@ -146,6 +156,7 @@ If running Docker on Proxmox VE:
    - **Sony Bravia / Android TV / Google TV**: Open the built-in **Media Player** app (or VLC / Nova Video Player) and browse local network servers.
 3. Select any category:
    - **Zeitleiste**: Fast year and month navigation.
+   - **Ordner**: Direct filesystem folder hierarchy of external libraries (event folders).
    - **Alben**: View albums with their original cover photos.
    - **Videos**: Browse all video clips in Immich.
    - **Personen**: Browse face avatars of family and friends, then select a person to see all their pictures.
@@ -180,6 +191,7 @@ The bridge includes an integrated web explorer for testing and browsing your lib
 | `IMMICH_DLNA_ENABLE_YEARS` | `true` | Enables hierarchical "Zeitleiste" container (organized by Year & Month). |
 | `IMMICH_DLNA_ENABLE_YEAR_ALL` | `true` | Enables the "00. Ganzes Jahr <year>" container inside each year. |
 | `IMMICH_DLNA_ENABLE_ALBUMS` | `true` | Enables albums browsing. |
+| `IMMICH_DLNA_ENABLE_FOLDERS` | `true` | Enables the "Ordner" container for external library filesystem folder view. |
 | `IMMICH_DLNA_ENABLE_VIDEOS` | `true` | Enables dedicated "Videos" container. |
 | `IMMICH_DLNA_ENABLE_PEOPLE` | `true` | Enables the "Personen" container (face recognition). |
 | `IMMICH_DLNA_SHOW_UNNAMED_PEOPLE` | `false` | When `false`, hides unnamed face detections to keep TV browsing clean. |

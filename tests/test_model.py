@@ -3,9 +3,11 @@ from __future__ import annotations
 from immich_dlna.dlna.model import (
     album_object_id,
     asset_object_id,
+    folder_object_id,
     month_object_id,
     parse_album_id,
     parse_asset_id,
+    parse_folder_path,
     parse_month_id,
     parse_person_id,
     parse_tag_group_id,
@@ -73,3 +75,13 @@ def test_id_formatting_and_parsing() -> None:
     as_obj_id = asset_object_id(as_id)
     assert as_obj_id == "asset:asset-999"
     assert parse_asset_id(as_obj_id) == "asset-999"
+
+    # Folder
+    fpath = "/usr/src/app/external/fritznas/2026-05 Urlaub & Geburtstag"
+    f_obj_id = folder_object_id(fpath)
+    assert f_obj_id.startswith("folder:")
+    assert parse_folder_path(f_obj_id) == fpath
+    assert parse_folder_path("album:abc-123") is None
+    assert parse_folder_path("folders") is None
+    assert parse_folder_path("folder:") is None
+

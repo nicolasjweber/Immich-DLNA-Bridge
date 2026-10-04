@@ -25,6 +25,7 @@ def test_settings_from_env_defaults() -> None:
         assert settings.model_url == "https://github.com/nicolasjweber/Immich-DLNA-Bridge"
         assert settings.enable_timeline is False
         assert settings.enable_albums is True
+        assert settings.enable_folders is True
         assert settings.enable_tags is True
         assert settings.tags_group_by_letter == "auto"
         assert settings.enable_years is True
@@ -41,6 +42,7 @@ def test_settings_from_env_custom_sort_options() -> None:
         "IMMICH_API_TOKEN": "secret-token",
         "IMMICH_DLNA_ENABLE_TIMELINE": "true",
         "IMMICH_DLNA_ENABLE_ALBUMS": "false",
+        "IMMICH_DLNA_ENABLE_FOLDERS": "false",
         "IMMICH_DLNA_ENABLE_VIDEOS": "false",
         "IMMICH_DLNA_ENABLE_YEAR_ALL": "false",
         "IMMICH_DLNA_NUMBER_PEOPLE": "false",
@@ -52,6 +54,7 @@ def test_settings_from_env_custom_sort_options() -> None:
         settings = Settings.from_env()
         assert settings.enable_timeline is True
         assert settings.enable_albums is False
+        assert settings.enable_folders is False
         assert settings.enable_videos is False
         assert settings.enable_year_all is False
         assert settings.number_people is False

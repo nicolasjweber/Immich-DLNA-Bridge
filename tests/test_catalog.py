@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock
 import pytest
 
 from immich_dlna.config import Settings
-from immich_dlna.dlna.catalog import ContentCatalog
+from immich_dlna.dlna.catalog import ContentCatalog, FolderNode, FolderTree
 from immich_dlna.dlna.model import (
     ALBUMS_ID,
     FAVORITES_ID,
+    FOLDERS_ID,
     PEOPLE_ID,
     PEOPLE_NAME_ID,
     PEOPLE_PHOTOS_ID,
@@ -20,6 +21,8 @@ from immich_dlna.dlna.model import (
     YEARS_ID,
     Container,
     MediaItem,
+    folder_object_id,
+    parse_folder_path,
     tag_group_object_id,
     tag_object_id,
 )
@@ -168,6 +171,20 @@ def mock_immich_client() -> ImmichClient:
             created_at="2024-08-20T18:00:00Z",
         )
     ]
+    client.list_folder_unique_paths.return_value = [
+        "/usr/src/app/external/fritznas/2026-05 Event A",
+        "/usr/src/app/external/fritznas/2026-06 Event B",
+        "/usr/src/app/external/fritznas_camcoder/2026-07 Vacation",
+    ]
+    client.get_folder_assets.return_value = [
+        ImmichAsset(
+            asset_id="fa1",
+            title="FolderPhoto.jpg",
+            original_mime_type="image/jpeg",
+            is_video=False,
+            created_at="2026-05-15T12:00:00Z",
+        )
+    ]
     return client
 
 
@@ -176,12 +193,14 @@ async def test_browse_root(mock_settings: Settings, mock_immich_client: ImmichCl
     # By default, full timeline is disabled for Smart TV performance
     catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
     entries, total = await catalog.browse(ROOT_ID, "BrowseDirectChildren", 0, 50)
-    assert total == 6
+    assert total == 7
     object_ids = [e.object_id for e in entries]
     assert TIMELINE_ID not in object_ids
     assert YEARS_ID in object_ids
     assert entries[0].object_id == YEARS_ID
     assert entries[0].title == "Zeitleiste"
+    assert entries[1].object_id == FOLDERS_ID
+    assert entries[1].title == "Ordner"
     assert ALBUMS_ID in object_ids
     assert VIDEOS_ID in object_ids
     assert PEOPLE_ID in object_ids
@@ -195,7 +214,7 @@ async def test_browse_root_with_timeline_enabled(mock_settings: Settings, mock_i
     settings_with_timeline = replace(mock_settings, enable_timeline=True)
     catalog = ContentCatalog(settings=settings_with_timeline, immich_client=mock_immich_client)
     entries, total = await catalog.browse(ROOT_ID, "BrowseDirectChildren", 0, 50)
-    assert total == 7
+    assert total == 8
     object_ids = [e.object_id for e in entries]
     assert TIMELINE_ID in object_ids
     assert entries[0].object_id == TIMELINE_ID
@@ -208,11 +227,22 @@ async def test_browse_root_with_albums_disabled(mock_settings: Settings, mock_im
     settings = replace(mock_settings, enable_albums=False)
     catalog = ContentCatalog(settings=settings, immich_client=mock_immich_client)
     entries, total = await catalog.browse(ROOT_ID, "BrowseDirectChildren", 0, 50)
-    assert total == 5
+    assert total == 6
     object_ids = [e.object_id for e in entries]
     assert ALBUMS_ID not in object_ids
     assert entries[0].object_id == YEARS_ID
     assert entries[0].title == "Zeitleiste"
+
+
+@pytest.mark.asyncio
+async def test_browse_root_with_folders_disabled(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    from dataclasses import replace
+    settings = replace(mock_settings, enable_folders=False)
+    catalog = ContentCatalog(settings=settings, immich_client=mock_immich_client)
+    entries, total = await catalog.browse(ROOT_ID, "BrowseDirectChildren", 0, 50)
+    assert total == 6
+    object_ids = [e.object_id for e in entries]
+    assert FOLDERS_ID not in object_ids
 
 
 @pytest.mark.asyncio
@@ -507,4 +537,130 @@ async def test_browse_tag_metadata(mock_settings: Settings, mock_immich_client: 
     assert len(single_meta) == 1
     assert single_meta[0].object_id == "tag:t1"
     assert single_meta[0].title == "Architecture"
+
+
+def test_folder_tree_collapse_logic() -> None:
+    # Setup matching external libraries mountpoint structure
+    paths = [
+        "/usr/src/app/external/fritznas/2026-05 Event A",
+        "/usr/src/app/external/fritznas/2026-06 Event B",
+        "/usr/src/app/external/fritznas_camcoder/2026-07 Vacation",
+    ]
+    tree = FolderTree.from_paths(paths)
+
+    # Common ancestor /usr/src/app/external should be the collapsed root
+    assert tree.root.path == "/usr/src/app/external"
+    assert tree.root.name == "usr/src/app/external"
+
+    # Its children should be the two libraries: fritznas and fritznas_camcoder
+    assert set(tree.root.children.keys()) == {"fritznas", "fritznas_camcoder"}
+    fritznas_node = tree.root.children["fritznas"]
+    assert fritznas_node.path == "/usr/src/app/external/fritznas"
+    assert set(fritznas_node.children.keys()) == {"2026-05 Event A", "2026-06 Event B"}
+
+    camcoder_node = tree.root.children["fritznas_camcoder"]
+    assert camcoder_node.path == "/usr/src/app/external/fritznas_camcoder"
+    assert set(camcoder_node.children.keys()) == {"2026-07 Vacation"}
+
+    # Nodes by path should contain all paths
+    assert "/usr/src/app/external" in tree.nodes_by_path
+    assert "/usr/src/app/external/fritznas" in tree.nodes_by_path
+    assert "/usr/src/app/external/fritznas/2026-05 Event A" in tree.nodes_by_path
+    assert "/usr/src/app/external/fritznas_camcoder/2026-07 Vacation" in tree.nodes_by_path
+
+
+def test_folder_tree_edge_cases() -> None:
+    # Empty paths
+    empty_tree = FolderTree.from_paths([])
+    assert len(empty_tree.root.children) == 0
+    assert not empty_tree.root.has_assets
+
+    # Windows paths with backslashes
+    win_paths = [
+        r"D:\Photos\2026\Trip A",
+        r"D:\Photos\2026\Trip B",
+    ]
+    win_tree = FolderTree.from_paths(win_paths)
+    assert win_tree.root.path == "D:/Photos/2026"
+    assert set(win_tree.root.children.keys()) == {"Trip A", "Trip B"}
+
+
+@pytest.mark.asyncio
+async def test_folder_with_direct_assets_and_subfolders(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    # Directory that has BOTH subfolders and direct assets
+    mock_immich_client.list_folder_unique_paths.return_value = [
+        "/media/photos",
+        "/media/photos/subfolder",
+    ]
+    mock_immich_client.get_folder_assets.return_value = [
+        ImmichAsset(
+            asset_id="photo1",
+            title="RootPhoto.jpg",
+            original_mime_type="image/jpeg",
+            is_video=False,
+            created_at="2026-01-01T12:00:00Z",
+        )
+    ]
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+
+    parent_obj_id = folder_object_id("/media/photos")
+    entries, total = await catalog.browse(parent_obj_id, "BrowseDirectChildren", 0, 50)
+    # Should contain subfolder container AND direct media item
+    assert total == 2
+    assert any(isinstance(e, Container) and e.title == "subfolder" for e in entries)
+    assert any(isinstance(e, MediaItem) and "RootPhoto.jpg" in e.title for e in entries)
+
+
+
+@pytest.mark.asyncio
+async def test_browse_folders_hierarchy_and_assets(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+
+    # 1. Browse "folders" root container
+    entries, total = await catalog.browse(FOLDERS_ID, "BrowseDirectChildren", 0, 50)
+    assert total == 2
+    titles = [e.title for e in entries]
+    assert titles == ["fritznas", "fritznas_camcoder"]
+    assert all(isinstance(e, Container) for e in entries)
+    assert all(e.parent_id == FOLDERS_ID for e in entries)
+
+    # 2. Browse inside "fritznas"
+    fritznas_entry = next(e for e in entries if e.title == "fritznas")
+    fn_entries, fn_total = await catalog.browse(fritznas_entry.object_id, "BrowseDirectChildren", 0, 50)
+    assert fn_total == 2
+    fn_titles = [e.title for e in fn_entries]
+    assert fn_titles == ["2026-05 Event A", "2026-06 Event B"]
+    assert all(e.parent_id == fritznas_entry.object_id for e in fn_entries)
+
+    # 3. Browse inside "2026-05 Event A" (leaf folder containing photos)
+    event_entry = next(e for e in fn_entries if e.title == "2026-05 Event A")
+    ev_entries, ev_total = await catalog.browse(event_entry.object_id, "BrowseDirectChildren", 0, 50)
+    assert ev_total == 1
+    assert isinstance(ev_entries[0], MediaItem)
+    assert "FolderPhoto.jpg" in ev_entries[0].title
+    assert ev_entries[0].parent_id == event_entry.object_id
+    mock_immich_client.get_folder_assets.assert_called_with("/usr/src/app/external/fritznas/2026-05 Event A")
+
+
+@pytest.mark.asyncio
+async def test_browse_folder_metadata(mock_settings: Settings, mock_immich_client: ImmichClient) -> None:
+    catalog = ContentCatalog(settings=mock_settings, immich_client=mock_immich_client)
+
+    # Root folders metadata
+    f_meta, _ = await catalog.browse(FOLDERS_ID, "BrowseMetadata", 0, 50)
+    assert len(f_meta) == 1
+    assert f_meta[0].object_id == FOLDERS_ID
+    assert f_meta[0].title == "Ordner"
+    assert f_meta[0].parent_id == ROOT_ID
+    assert f_meta[0].child_count == 2
+
+    # Child folder metadata
+    fn_obj_id = folder_object_id("/usr/src/app/external/fritznas")
+    fn_meta, _ = await catalog.browse(fn_obj_id, "BrowseMetadata", 0, 50)
+    assert len(fn_meta) == 1
+    assert fn_meta[0].object_id == fn_obj_id
+    assert fn_meta[0].title == "fritznas"
+    assert fn_meta[0].parent_id == FOLDERS_ID
+    assert fn_meta[0].child_count == 2
+
 

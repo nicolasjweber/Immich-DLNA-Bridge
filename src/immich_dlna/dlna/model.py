@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 
 ROOT_ID = "0"
 TIMELINE_ID = "timeline"
 YEARS_ID = "years"
+FOLDERS_ID = "folders"
 ALBUMS_ID = "albums"
 VIDEOS_ID = "videos"
 PEOPLE_ID = "people"
@@ -48,6 +50,7 @@ BrowseEntry = Container | MediaItem
 ROOT_CONTAINER = Container(object_id=ROOT_ID, parent_id="-1", title="Immich", child_count=6)
 TIMELINE_CONTAINER = Container(object_id=TIMELINE_ID, parent_id=ROOT_ID, title="Zeitleiste (Alle Fotos)")
 YEARS_CONTAINER = Container(object_id=YEARS_ID, parent_id=ROOT_ID, title="Zeitleiste")
+FOLDERS_CONTAINER = Container(object_id=FOLDERS_ID, parent_id=ROOT_ID, title="Ordner")
 ALBUMS_CONTAINER = Container(object_id=ALBUMS_ID, parent_id=ROOT_ID, title="Alben")
 VIDEOS_CONTAINER = Container(object_id=VIDEOS_ID, parent_id=ROOT_ID, title="Videos")
 PEOPLE_CONTAINER = Container(object_id=PEOPLE_ID, parent_id=ROOT_ID, title="Personen")
@@ -147,3 +150,23 @@ def parse_asset_id(object_id: str) -> str | None:
         return None
     asset_id = object_id.split(":", 1)[1]
     return asset_id or None
+
+
+def folder_object_id(path: str) -> str:
+    encoded = base64.urlsafe_b64encode(path.encode("utf-8")).decode("ascii").rstrip("=")
+    return f"folder:{encoded}"
+
+
+def parse_folder_path(object_id: str) -> str | None:
+    if not object_id.startswith("folder:"):
+        return None
+    encoded = object_id.split(":", 1)[1]
+    if not encoded:
+        return None
+    try:
+        padding = (4 - len(encoded) % 4) % 4
+        decoded_bytes = base64.urlsafe_b64decode(encoded + "=" * padding)
+        return decoded_bytes.decode("utf-8")
+    except Exception:
+        return None
+

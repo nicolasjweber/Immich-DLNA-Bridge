@@ -215,3 +215,58 @@ async def test_list_videos(test_settings: Settings) -> None:
         assert assets[0].original_mime_type == "video/mp4"
         assert assets[0].is_video is True
 
+
+@pytest.mark.asyncio
+async def test_list_folder_unique_paths(test_settings: Settings) -> None:
+    client = ImmichClient(settings=test_settings)
+    mock_paths = [
+        "/usr/src/app/external/fritznas/2026-05 Birthday",
+        "/usr/src/app/external/fritznas/2026-06 Vacation",
+        "/usr/src/app/external/fritznas_camcoder",
+    ]
+
+    with patch.object(client, "_request_json", new_callable=AsyncMock) as mock_req:
+        mock_req.return_value = mock_paths
+
+        paths = await client.list_folder_unique_paths()
+        assert len(paths) == 3
+        assert paths[0] == "/usr/src/app/external/fritznas/2026-05 Birthday"
+        assert paths[2] == "/usr/src/app/external/fritznas_camcoder"
+        mock_req.assert_called_once_with("/view/folder/unique-paths")
+
+
+@pytest.mark.asyncio
+async def test_get_folder_assets(test_settings: Settings) -> None:
+    client = ImmichClient(settings=test_settings)
+    mock_assets_payload = [
+        {
+            "id": "asset-folder-1",
+            "type": "IMAGE",
+            "originalFileName": "IMG_001.JPG",
+            "originalMimeType": "image/jpeg",
+            "fileCreatedAt": "2026-05-10T12:00:00Z",
+        },
+        {
+            "id": "asset-folder-2",
+            "type": "VIDEO",
+            "originalFileName": "CLIP_001.MP4",
+            "originalMimeType": "video/mp4",
+            "fileCreatedAt": "2026-05-10T12:05:00Z",
+        },
+    ]
+
+    with patch.object(client, "_request_json", new_callable=AsyncMock) as mock_req:
+        mock_req.return_value = mock_assets_payload
+
+        assets = await client.get_folder_assets("/usr/src/app/external/fritznas/2026-05 Birthday")
+        assert len(assets) == 2
+        assert assets[0].asset_id == "asset-folder-1"
+        assert assets[0].is_video is False
+        assert assets[1].asset_id == "asset-folder-2"
+        assert assets[1].is_video is True
+        mock_req.assert_called_once_with(
+            "/view/folder",
+            params={"path": "/usr/src/app/external/fritznas/2026-05 Birthday"},
+        )
+
+

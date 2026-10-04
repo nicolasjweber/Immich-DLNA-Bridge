@@ -96,6 +96,7 @@ class Settings:
     enable_years: bool = True
     enable_year_all: bool = True
     enable_albums: bool = True
+    enable_folders: bool = True
     image_quality: str = "auto"
     prefer_jpeg: bool = True
     transcode_webp_to_jpeg: bool = True
@@ -214,6 +215,7 @@ class Settings:
             enable_years=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_YEARS"), True),
             enable_year_all=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_YEAR_ALL"), True),
             enable_albums=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_ALBUMS"), True),
+            enable_folders=_parse_bool(os.getenv("IMMICH_DLNA_ENABLE_FOLDERS"), True),
             image_quality=image_quality,
             prefer_jpeg=_parse_bool(os.getenv("IMMICH_DLNA_PREFER_JPEG"), True),
             transcode_webp_to_jpeg=_parse_bool(os.getenv("IMMICH_DLNA_TRANSCODE_WEBP_TO_JPEG"), True),

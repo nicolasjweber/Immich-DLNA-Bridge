@@ -117,6 +117,14 @@ class ImmichClient:
             settings.metadata_cache_ttl_seconds,
             settings.metadata_cache_max_entries,
         )
+        self._folder_paths_cache = TtlCache[list[str]](
+            settings.metadata_cache_ttl_seconds,
+            settings.metadata_cache_max_entries,
+        )
+        self._folder_assets_cache = TtlCache[list[ImmichAsset]](
+            settings.metadata_cache_ttl_seconds,
+            settings.metadata_cache_max_entries,
+        )
 
         self._ssl: bool | None = None if settings.immich_verify_ssl else False
         self._json_timeout = aiohttp.ClientTimeout(total=self.settings.immich_timeout_seconds)
@@ -459,6 +467,48 @@ class ImmichClient:
         if not sort_criteria:
             self._album_assets_cache.set(cache_key, assets)
         return assets
+
+    # ==========================
+    # Folders (External Libraries)
+    # ==========================
+    async def list_folder_unique_paths(self) -> list[str]:
+        cached = self._folder_paths_cache.get("paths")
+        if cached is not None:
+            return cached
+
+        try:
+            payload = await self._request_json("/view/folder/unique-paths")
+            paths: list[str] = []
+            if isinstance(payload, list):
+                for item in payload:
+                    if isinstance(item, str) and item.strip():
+                        paths.append(item.strip())
+            self._folder_paths_cache.set("paths", paths)
+            return paths
+        except ImmichError as exc:
+            self.logger.warning("Could not fetch folder unique paths: %s", exc)
+            return []
+
+    async def get_folder_assets(self, path: str) -> list[ImmichAsset]:
+        cache_key = f"folder:{path}"
+        cached = self._folder_assets_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            payload = await self._request_json("/view/folder", params={"path": path})
+            assets: list[ImmichAsset] = []
+            if isinstance(payload, list):
+                for item in payload:
+                    if isinstance(item, dict):
+                        asset = self._parse_asset(item)
+                        assets.append(asset)
+                        self._asset_cache.set(f"asset:{asset.asset_id}", asset)
+            self._folder_assets_cache.set(cache_key, assets)
+            return assets
+        except ImmichError as exc:
+            self.logger.warning("Could not fetch folder assets for path=%s: %s", path, exc)
+            return []
 
     # ==========================
     # People / Persons
